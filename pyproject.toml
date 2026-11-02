@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hubbard-parameter"
+version = "1.0.0"
+description = "Ab-initio Hubbard parameters (t, U) for atoms in a 3D optical lattice from the exact 6D two-body problem"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "hubbard-parameter contributors" }]
+keywords = ["ultracold atoms", "optical lattice", "Hubbard model", "Fermi-Hubbard"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = ["numpy>=1.22", "scipy>=1.8"]
+
+[project.scripts]
+hubbard-parameter = "hubbard_parameter.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["hubbard_parameter*"]

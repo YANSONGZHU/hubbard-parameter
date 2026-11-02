@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.so
+
+# editors / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# results
+*.json
+!examples/*.json

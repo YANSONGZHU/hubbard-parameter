@@ -1,0 +1,249 @@
+# hubbard-parameter
+
+**Ab-initio tunnelling and on-site interaction parameters of the Hubbard model
+for ultracold atoms in a three-dimensional optical lattice.**
+
+Given the lattice geometry, the atomic species and the scattering length, the
+package returns
+
+* the tunnelling amplitudes `t_x, t_y, t_z`, and
+* the on-site interaction energy `U`
+
+computed from the **exact six-dimensional two-body problem** — no δ-pseudopotential
+plus lowest-Bloch-band approximation.
+
+MIT licensed.
+
+> Generated with **DeepSeek Harness + DeepSeek 4.1 Flash 1017**
+> (code, tests, examples and documentation).
+
+---
+
+## Why another Hubbard-parameter code?
+
+The textbook formula
+
+```
+U = (4 pi hbar^2 a / m) * \int |w(r)|^4 d^3r
+```
+
+replaces the atom–atom interaction by a zero-range pseudopotential and restricts
+the Hilbert space to the lowest Bloch band. It is only accurate when
+`|a| << a_ho`, where `a_ho` is the on-site oscillator length. In practice
+`a_ho = 2000-3000 a0` for a 1064 nm lattice, while useful scattering lengths are
+`300-2000 a0`: the standard formula is then off by **a few per cent at best and
+by >25 % near a Feshbach resonance**.
+
+This package removes both approximations:
+
+| approximation | standard formula | this package |
+|---|---|---|
+| interaction | zero-range δ | exact zero-range contact, built into the basis (no regularisation) |
+| trap | harmonic at the well bottom | exact `sin^2` lattice potential |
+| Hilbert space | lowest Bloch band | full 6D, arbitrary band mixing |
+| c.m.–relative coupling | neglected | included exactly |
+
+---
+
+## Method
+
+Two atoms in one lattice site, interacting by a zero-range s-wave contact:
+
+```
+H = p1^2/2m + p2^2/2m + V(r1) + V(r2) + contact,
+V(r) = sum_c V_c sin^2(k x_c),        k = pi / a_lat.
+```
+
+1. **Centre-of-mass / relative coordinates.** With `X_c = (x1c+x2c)/2`,
+   `r_c = x1c-x2c` the two-body potential is *exactly*
+
+   ```
+   V_c sin^2(k(X_c+r_c/2)) + V_c sin^2(k(X_c-r_c/2))
+       = V_c [ 1 - cos(2k X_c) cos(k r_c) ] .
+   ```
+
+2. **Harmonic reference basis.** The basis is the exact eigenbasis of the
+   harmonic part:
+   * centre of mass — 3D harmonic oscillator states,
+   * relative motion, `l = 0` — the exact contact-interacting states of a
+     harmonic trap (Busch states, obtained from the closed-form relation
+     `a/a_ho = (1/2) Gamma(1/4-E/2hw) / Gamma(3/4-E/2hw)`),
+   * relative motion, `l >= 2` — ordinary oscillator states (the contact does
+     not act in higher partial waves).
+
+   The zero-range interaction is therefore **built into the basis** and needs no
+   regularisation.
+
+3. **Configuration interaction.** The residual `W = V_exact - V_harm` is
+   diagonalised in that basis. `V_exact` is bounded, so the truncated CI is
+   variational.
+
+4. **Hopping** is obtained from the exact 1D Bloch band of each direction; the
+   3D lattice is separable, so `t_c` is the 1D tight-binding hopping and the
+   transverse overlaps are exactly unity.
+
+5. **On-site interaction** follows as `U = E_2(a) - 2 E_1 = hbar*w0 [E_gs(a) - E_gs(0)]`,
+   so the non-interacting reference cancels exactly.
+
+For an anisotropic lattice a single reference frequency (geometric mean) is used
+for the basis; the per-direction depths enter the CI matrix directly.
+
+---
+
+## Installation
+
+```bash
+git clone <this-repo>
+cd hubbard-parameter
+pip install -e .            # or simply add the folder to PYTHONPATH
+```
+
+Requires Python ≥ 3.9, NumPy ≥ 1.22, SciPy ≥ 1.8.
+
+---
+
+## Quick start
+
+### Python
+
+```python
+from hubbard_parameter import compute_hubbard_parameters
+
+res = compute_hubbard_parameters(
+    lattice_constant_nm=532.0,      # lattice period = lambda/2
+    depths_Er=(20.0, 20.0, 20.0),   # Vx, Vy, Vz in recoil energies
+    scattering_lengths_a0=[300.0, 1000.0],
+    species="6Li",
+)
+
+res["t_Hz"]                          # [72.8, 72.8, 72.8]  Hz
+res["interaction"][0]["U_Hz"]        # U for a = 300 a0
+res["interaction"][0]["U_over_t"]    # U/t along x, y, z
+```
+
+### Command line
+
+```bash
+python -m hubbard_parameter.cli \
+    --species 6Li --lattice-constant 532 \
+    --depth 20 20 20 --scattering-length 171.41 -738.04
+```
+
+```
+====================================================================================
+  species            : 6Li   (m = 6.0151 u)
+  lattice constant   : 532.0 nm (lambda = 1064.0 nm)
+  depths (x,y,z)     : 20.00, 20.00, 20.00  E_R
+  E_R                : 29.299 kHz  (1.406 uK)
+------------------------------------------------------------------------------------
+  tunneling
+    t_x = t_y = t_z = 0.0728 kHz
+------------------------------------------------------------------------------------
+  on-site interaction
+        a [a0]      U [kHz]   U_std [kHz]        U/t
+        171.41      20.2490       19.9108    278.118
+       -738.04     -71.9069      -85.7300   -987.634
+====================================================================================
+```
+
+Add `--json out.json` to also dump every intermediate quantity.
+
+---
+
+## Input conventions
+
+| quantity | unit | note |
+|---|---|---|
+| `lattice_constant_nm` | nm | **period of the lattice potential = λ/2** (532 nm for a 1064 nm laser) |
+| `depths_Er` | `E_R` | `E_R = h^2/(2 m λ^2) = h^2/(8 m a_lat^2)` |
+| `scattering_lengths_a0` | Bohr radii | one `U` is returned per value |
+| `species` | string | `6Li`, `7Li`, `23Na`, `39K`, `40K`, `41K`, `85Rb`, `87Rb`, `133Cs`, `87Sr`, `173Yb`, `174Yb`; or pass `mass_u=` |
+| `basis` | `fast` / `default` / `accurate` | CI cut-offs, see below |
+
+Sign convention: `U > 0` for repulsive interactions, `t > 0` by definition
+(`H = -t sum_<ij> c_i^dag c_j + U sum_i n_i n_i`).
+
+## Output fields
+
+| key | meaning |
+|---|---|
+| `recoil_Hz`, `recoil_uK` | recoil energy of the lattice photon |
+| `omega_Hz` | site trap frequency per direction |
+| `a_ho_a0` | oscillator length of the *relative* motion, `a_ho = sqrt(2 hbar/(m ω))` |
+| `t_Hz`, `t_over_ER` | hopping amplitude per direction |
+| `A_1D`, `A3` | Wannier anharmonicity factors `A_c` and `A1*A2*A3` |
+| `interaction[i].U_Hz` | on-site interaction (exact 6D) |
+| `interaction[i].U_standard_Hz` | the textbook δ-pseudopotential + lowest-band value, for comparison |
+| `interaction[i].U_over_Ustandard` | exact/standard ratio — this is the size of the correction |
+| `interaction[i].U_over_t` | `U/t` along x, y, z (a list of three numbers) |
+
+## Accuracy and basis cut-offs
+
+| preset | `ncm` | `lmax` | `rel_emax` | typical run time | accuracy |
+|---|---|---|---|---|---|
+| `fast` | 3 | 4 | 8 | ~1 s / a | ~0.1 % |
+| `default` | 4 | 4 | 9 | ~2 s / a | ~0.01 % |
+| `accurate` | 5 | 6 | 10 | ~25 s / a | reference |
+
+Convergence is checked in `tests/test_hubbard.py`; for a cubic lattice the
+`default` and `accurate` values differ by less than 3 Hz on `U ≈ 72 kHz`
+(4 × 10⁻⁵).
+
+Validated against:
+
+* the 1D single-particle limit — 4.201 vs 4.200 `E_R` from an exact Bloch
+  calculation;
+* the `a → 0` limit — recovers the standard formula to better than 0.2 % at
+  `a = 5 a0`;
+* a 9-point experimental data set on ⁶Li (¹³ and ¹² pairs, 1064 nm, 20 `E_R`):
+
+| theory | rms deviation | max deviation |
+|---|---|---|
+| standard `U_BH` | 5.56 kHz | 13.18 kHz (26 %) |
+| `A^3 U_harm` (2009 ansatz) | 0.50 kHz | 1.36 kHz |
+| **this package (6D exact)** | **0.30 kHz** | **0.67 kHz** |
+
+---
+
+## Limitations
+
+* **Single-band Hubbard model assumed.** The output is `t` and `U`; the model
+  itself (and the density of states) must be checked separately.
+* **Zero-range interaction.** The effective range is neglected. For a *narrow*
+  Feshbach resonance this is a real systematic (typically ~1 %); a real
+  Born–Oppenheimer potential would be needed to remove it.
+* **Scattering branch only.** For `a > 0` the molecular branch is deliberately
+  excluded from the basis, so the returned `U` is the (metastable) scattering
+  branch — which is the one that enters the repulsive Hubbard model.
+* **Anisotropy** is treated with a single reference frequency for the basis;
+  it is variational and converges, but for strongly anisotropic lattices
+  (depths differing by more than ~30 %) use `basis="accurate"` or check
+  convergence manually.
+* Two-body physics only: no three-body or many-body corrections.
+
+---
+
+## References
+
+1. T. Busch, B.-G. Englert, K. Rzażewski, M. Wilkens,
+   *Two cold atoms in a harmonic trap*, Found. Phys. **28**, 549 (1998).
+2. P.-I. Schneider, S. Grishkevich, A. Saenz,
+   *Ab initio determination of Bose-Hubbard parameters …*,
+   Phys. Rev. A **80**, 013404 (2009).
+3. S. Grishkevich, S. Sala, A. Saenz,
+   *Theoretical description of two ultracold atoms in finite three-dimensional
+   optical lattices using realistic interatomic interaction potentials*,
+   Phys. Rev. A **84**, 062710 (2011).
+4. Z. Idziaszek, T. Calarco, Phys. Rev. A **71**, 050701(R) (2005) —
+   anisotropic harmonic traps.
+
+---
+
+## Authorship
+
+The code, the tests, the examples and this documentation were generated by
+**DeepSeek Harness + DeepSeek 4.1 Flash 1017**.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
